@@ -1,0 +1,9 @@
+[package]
+name = "heathen"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+description = "a WASM-compatible GUI engine that is agnostic of platform, backend, language, and markup"
+repository = "https://github.com/konall/heathen"
+
+[dependencies]
