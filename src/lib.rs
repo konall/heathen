@@ -1,14 +1,16 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+#[macro_use]
+mod engine;
+mod parsing;
+mod animations;
+mod events;
+mod style;
+mod node;
+mod document;
+mod element;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub(crate) type Xid = usize;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use document::Document;
+pub use element::Element;
+pub use events::Event;
+pub use miniserde::json::Value;
