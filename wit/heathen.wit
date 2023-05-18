@@ -1,0 +1,6 @@
+default world heathen {
+    export rpc: func(request: string) -> string
+    
+    import handlers: func() -> list<string>
+    import components: func() -> list<string>
+}

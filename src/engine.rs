@@ -6,16 +6,50 @@ use crate::{
     animations::Animation,
     events::*,
     style::Style,
-    parsing::{Selectors, SelectorAttributeRuleType, SelectorLink},
+    selectors::{Selector, Op, Link},
 };
+
+#[derive(Clone, Copy, Default)]
+pub(crate) enum Modifiers {
+    #[default]
+    Empty = 0b0000,
+    Control = 0b0001,
+    Alt = 0b0010,
+    Shift = 0b0100,
+    Super = 0b1000
+}
+pub(crate) type ModifiersState = u8;
 
 #[derive(Copy, Clone, Default)]
 pub(crate) struct State {
-    pub(crate) mouse_pos: lyon::math::Point,
-    pub(crate) hovered: Element,
-    pub(crate) focused: Element,
+    pub(crate) mouse_position: lyon::math::Point,
+    pub(crate) hovered: Xid,
+    pub(crate) focused: Xid,
     pub(crate) window_size: lyon::math::Size,
-    // pub modifiers: winit::event::ModifiersState,
+    pub(crate) modifiers: ModifiersState,
+}
+impl State {
+    pub fn mouse_position(&self) -> lyon::math::Point {
+        self.mouse_position
+    }
+    pub fn hovered(&self) -> Element {
+        Element(self.hovered)
+    }
+    pub fn focused(&self) -> Element {
+        Element(self.focused)
+    }
+    pub fn control_key_pressed(&self) -> bool {
+        self.modifiers & Modifiers::Control as u8 != 0
+    }
+    pub fn alt_key_pressed(&self) -> bool {
+        self.modifiers & Modifiers::Alt as u8 != 0
+    }
+    pub fn shift_key_pressed(&self) -> bool {
+        self.modifiers & Modifiers::Shift as u8 != 0
+    }
+    pub fn super_key_pressed(&self) -> bool {
+        self.modifiers & Modifiers::Super as u8 != 0
+    }
 }
 
 pub(crate) static DOM: once_cell::sync::OnceCell<std::sync::Arc<std::sync::Mutex<Engine>>> = once_cell::sync::OnceCell::new();
@@ -40,14 +74,15 @@ macro_rules! dom {
 }
 
 #[derive(Default)]
-pub(crate) struct Engine {
+pub(crate) struct Engine<'a> {
     pub(crate) state: State,
     pub(crate) layout: taffy::Taffy,
     pub(crate) nodes: std::collections::HashMap<Xid, Node>,
     pub(crate) root: Xid,
     pub(crate) available_xids: Vec<Xid>,
     
-    pub(crate) listeners: std::collections::HashMap<String, Vec<(Option<String>, String)>>, // TODO?: HashMap<String, Vec<Option<dernok_parsing::Selector>, String>>
+    // pub(crate) listeners: std::collections::HashMap<String, Vec<(Option<Selector<'a>>, String)>>,
+    pub(crate) listeners: std::collections::HashMap<String, Vec<(Option<String>, String)>>,
     pub(crate) handlers: std::collections::HashMap<String, std::sync::Arc<std::sync::Mutex<dyn Fn(Event) + Send + Sync + 'static>>>,
     pub(crate) indicators: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub(crate) requirements: std::collections::HashMap<String, std::collections::HashSet<String>>,
@@ -57,12 +92,12 @@ pub(crate) struct Engine {
     
     // styling
     pub(crate) animations: Vec<(Xid, Animation)>,
-    pub(crate) stylesheet: std::collections::HashMap<String, Style>,
+    pub(crate) stylesheet: std::collections::HashMap<Selector<'a>, Style>,
 }
 
-impl Engine {
+impl Engine<'_> {
     pub(crate) fn xid() -> Xid {
-        dom!().available_xids.pop().unwrap_or(dom!().nodes.len())
+        dom!().available_xids.pop().unwrap_or(dom!().nodes.len() as Xid)
     }
     
     pub(crate) fn is_within(xid: Xid, point: lyon::math::Point) -> bool {
@@ -115,7 +150,7 @@ impl Engine {
         .unwrap();
     }
     
-    pub(crate) fn emit(ty: EventTy, src: Xid) {
+    pub(crate) fn emit(ty: EventTy, src: Xid, extra: Value) {
         // --- actions: specifiers ---
         // click: left, right, middle
         // mouse: move, enter, leave,
@@ -144,7 +179,8 @@ impl Engine {
             state: state.clone(),
             prev: state.clone(),
             target: Element(src),
-            src: Element(src)
+            src: Element(src),
+            extra
         };
         
         // println!("@@@: {}, {}, {}", &event.ty, &event.timestamp, &info);
@@ -163,18 +199,18 @@ impl Engine {
             
             EventTy::Click(_) => {
                 // TODO: context menu?
-                let nxt_focused = dom!().state.hovered.0;
+                let nxt_focused = dom!().state.hovered;
                 
-                event.state.focused.0 = nxt_focused;
+                event.state.focused = nxt_focused;
                 dom!().event_queue.push(event.clone());
                 
-                let new_focused = nxt_focused != event.prev.focused.0; //TODO: TAB FOCUS
+                let new_focused = nxt_focused != event.prev.focused; //TODO: TAB FOCUS
                 if new_focused {
-                    dom!().state.focused.0 = nxt_focused;
+                    dom!().state.focused = nxt_focused;
                     current.push(Event {
                         ty: EventTy::Focus(FocusEvent::Out),
-                        target: event.prev.focused.clone(),
-                        src: event.prev.focused.clone(),
+                        target: Element(event.prev.focused),
+                        src: Element(event.prev.focused),
                         ..event.clone()
                     });
                     current.push(Event {
@@ -203,32 +239,32 @@ impl Engine {
             },
             
             EventTy::Mouse(e) => {
-                // dom!().state.mouse_pos = e;
+                // dom!().state.mouse_position = e;
                 let nxt_hovered =
                     dom!()
                         .nodes
                         .values()
                         .filter(|n| {
-                                Self::is_within(n.xid, dom!().state.mouse_pos)
+                                Self::is_within(n.xid, dom!().state.mouse_position)
                                 && !n.hidden
                         })
                         .reduce(|acc, item| { if acc.style.z > item.style.z { acc } else { item } })
                         .map(|n| n.xid)
                         .unwrap_or_default();
                     
-                event.state.hovered.0 = nxt_hovered;
-                event.target.0 = nxt_hovered;
-                event.src.0 = nxt_hovered;
+                event.state.hovered = nxt_hovered;
+                event.target = Element(nxt_hovered);
+                event.src = Element(nxt_hovered);
                 
                 current.push(event.clone());
                 
-                let new_hovered = nxt_hovered != event.prev.hovered.0;
+                let new_hovered = nxt_hovered != event.prev.hovered;
                 if new_hovered {
-                    dom!().state.hovered.0 = nxt_hovered;
+                    dom!().state.hovered = nxt_hovered;
                     current.push(Event {
                         ty: EventTy::Mouse(MouseEvent::Leave),
-                        target: event.prev.hovered.clone(),
-                        src: event.prev.hovered.clone(),
+                        target: Element(event.prev.hovered),
+                        src: Element(event.prev.hovered),
                         ..event.clone()
                     });
                     current.push(Event {
@@ -254,9 +290,9 @@ impl Engine {
         while !current.is_empty() {
             for mut event in current {
                 dom!().event_queue.push(event.clone());
-                // if let Some(parent) = this.borrow().parents.get(&event.target.uuid) {
-                //     if *parent != event.target.uuid {
-                //         event.target.uuid = *parent;
+                // if let Some(parent) = this.borrow().parents.get(&event.target.0) {
+                //     if *parent != event.target.0 {
+                //         event.target.0 = *parent;
                 //         nxt.push(event);
                 //     }
                 // }
@@ -317,94 +353,111 @@ impl Engine {
     pub(crate) fn select(selectors: &str) -> Vec<Element> {
         let dom = dom!();
         
-        let selectors = selectors
-            .split(',')
-            .map(|s| Selectors::new(s))
-            .collect::<Vec<_>>();
+        let selectors =
+            selectors
+                .split(',')
+                .filter_map(|s| Selector::parse(s))
+                .collect::<Vec<_>>();
         
         let mut res = std::collections::HashSet::new();
         
-        for requirement in selectors {
-            let mut matching = dom.nodes.keys().map(|uuid| Element(*uuid)).collect::<Vec<_>>();
+        for selector in selectors {
+            let mut matching = dom.nodes.keys().map(|xid| Element(*xid)).collect::<Vec<_>>();
             
-            for (selector, link) in requirement.iter() {
+            for (rule, link) in selector.x {
+                println!("{:?} -- {:?} -- {:?}", rule.tag.as_ref().map(|x| x.0), rule.xid.as_ref().map(|x| x.0), rule.id.as_ref().map(|x| x.0));
                 matching.retain(|el| {
-                    dom.nodes.get(&el.0).map(|node| {
-                        if let Some(tag) = &selector.tag {
-                            if !node.tag.eq(tag.to_string().as_str()) { return false; }
+                    let node = &dom.nodes[&el.0];
+                    
+                    if let Some(tag) = &rule.tag {
+                        if node.tag != tag.0 {
+                            return false;
                         }
-                        
-                        if let Some(id) = &selector.id {
-                            if !node.id.as_ref().map(|nid| nid == id.to_string().as_str()).unwrap_or_default() { return false; }
+                    }
+                    
+                    if let Some(xid) = &rule.xid {
+                        if node.xid.to_string() != xid.0 {
+                            return false;
                         }
-                        
-                        if !selector.classes.iter().all(|class| node.classes.contains(class.to_string().as_str())) { return false; }
-                        
-                        for attr_rule in &selector.attribute_rules {
-                            match &attr_rule.ty {
-                                SelectorAttributeRuleType::Exists => {
-                                    if !node.attributes.contains_key(attr_rule.attr.to_string().as_str()) { return false; }
-                                },
-                                ty => {
-                                    let value = attr_rule.value.unwrap();
-                                    let valid = node.attributes.get(attr_rule.attr.to_string().as_str()).map(|v| {
-                                        let miniserde::json::Value::String(v) = v else { return false };
-                                        match ty {
-                                            SelectorAttributeRuleType::Equals => {
-                                                v.eq(value)
-                                            },
-                                            SelectorAttributeRuleType::NotEquals => {
-                                                v.ne(value)
-                                            },
-                                            SelectorAttributeRuleType::StartsWith => {
-                                                v.starts_with(value)
-                                            },
-                                            SelectorAttributeRuleType::Contains => {
-                                                v.contains(value)
-                                            },
-                                            SelectorAttributeRuleType::EndsWith => {
-                                                v.ends_with(value)
-                                            },
-                                            _ => unreachable!()
+                    }
+                    
+                    if let Some(id) = &rule.id {
+                        if let Some(nid) = &node.id {
+                            if nid != id.0 {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    }
+                    
+                    if !rule.classes.iter().all(|class| node.classes.contains(class.0)) {
+                        return false;
+                    }
+                    
+                    for attr in &rule.attributes {
+                        match &attr.op {
+                            Op::Exists => {
+                                if !node.attributes.contains_key(attr.name.0) {
+                                    return false;
+                                }
+                            },
+                            op => {
+                                let Some(value) = attr.value else {
+                                    return false;
+                                };
+                                
+                                if let Some(nvalue) = node.attributes.get(attr.name.0) {
+                                    let v = serde_json::to_string(nvalue).unwrap();
+                                    return {
+                                        match op {
+                                            Op::Equals => v == value,
+                                            Op::NotEquals => v != value,
+                                            Op::StartsWith => v.starts_with(value),
+                                            Op::Contains => v.contains(value),
+                                            Op::EndsWith => v.ends_with(value),
+                                            _ => false
                                         }
-                                    }).unwrap_or_default();
-                                    if !valid { return false; }
+                                    };
+                                } else {
+                                    return false;
                                 }
                             }
                         }
-                        true
-                    }).unwrap_or_default()
+                    }
+                    
+                    true
                 });
                 
                 if let Some(link) = link {
-                    if matches!(
-                        link,
-                        SelectorLink::Parent
-                            | SelectorLink::NextSibling
-                            | SelectorLink::PrevSibling
-                    ) {
-                        matching = matching
-                            .into_iter()
-                            .flat_map(|el| match link {
-                                SelectorLink::Parent => el.parent(),
-                                SelectorLink::NextSibling => el.next_sibling(),
-                                SelectorLink::PrevSibling => el.prev_sibling(),
-                                _ => unreachable!(),
-                            })
-                            .collect();
-                    } else {
-                        matching = matching
-                            .into_iter()
-                            .flat_map(|el| match link {
-                                SelectorLink::Ancestors => el.ancestors(),
-                                SelectorLink::Descendants => el.descendants(),
-                                SelectorLink::Children => el.children(),
-                                SelectorLink::NextSiblings => el.next_siblings(),
-                                SelectorLink::PrevSiblings => el.prev_siblings(),
-                                SelectorLink::Siblings => el.siblings(),
-                                _ => unreachable!(),
-                            })
-                            .collect();
+                    match link {
+                        Link::Parent | Link::NextSibling | Link::PrevSibling => {
+                            matching =
+                                matching
+                                    .into_iter()
+                                    .filter_map(|el| match link {
+                                        Link::Parent => el.parent(),
+                                        Link::NextSibling => el.next_sibling(),
+                                        Link::PrevSibling => el.prev_sibling(),
+                                        _ => None
+                                    })
+                                    .collect();
+                        },
+                        _ => {
+                            matching =
+                                matching
+                                    .into_iter()
+                                    .flat_map(|el| match link {
+                                        Link::Ancestors => el.ancestors(),
+                                        Link::Descendants => el.descendants(),
+                                        Link::Children => el.children(),
+                                        Link::NextSiblings => el.next_siblings(),
+                                        Link::PrevSiblings => el.prev_siblings(),
+                                        Link::Siblings => el.siblings(),
+                                        _ => vec![]
+                                    })
+                                    .collect();
+                        }
                     }
                 }
             }

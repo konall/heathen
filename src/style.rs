@@ -83,7 +83,7 @@ pub struct Style {
     pub border_radii: BorderRadii,
     pub border_colours: BorderColours,
     
-    pub layout: taffy::prelude::Style,
+    pub layout: taffy::prelude::Style
 }
 
 #[derive(Clone, Default)]

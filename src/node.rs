@@ -10,6 +10,9 @@ pub(crate) struct Node {
     pub(crate) xid: Xid,
     pub(crate) layout_id: taffy::node::Node,
     
+    pub(crate) parent: Option<Xid>,
+    pub(crate) children: Vec<Xid>,
+    
     pub(crate) scroll_offset: lyon::math::Point,
     pub(crate) hidden: bool,
     
@@ -18,13 +21,12 @@ pub(crate) struct Node {
     pub(crate) classes: std::collections::HashSet<String>,
     pub(crate) text: Option<String>,
     
-    pub(crate) style: Style,
     pub(crate) attributes: std::collections::HashMap<String, Value>,
     // pub(crate) listeners: Vec<Listener>,
     // pub accessibility: accesskit::Node,
     
-    pub(crate) parent: Option<Xid>,
-    pub(crate) children: Vec<Xid>
+    pub(crate) style: Style,
+    pub(crate) style_score: std::collections::HashMap<String, usize>
 }
 
 
@@ -33,6 +35,11 @@ pub struct Vertex {
     pub colour: colorgrad::Color
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Vertex2 {
+    pub position: [f32; 3],
+    pub colour: [f32; 4]
+}
 
 impl Node {
     pub(crate) fn layout(&self) -> taffy::layout::Layout {

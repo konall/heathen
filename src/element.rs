@@ -3,10 +3,13 @@ use crate::{
     engine::{Engine, DOM},
     events::Event,
     style::Style,
+    selectors::Selector,
     Value
 };
 
 #[derive(Copy, Clone, Default, Hash, Eq, PartialEq)]
+#[derive(serde::Serialize)]
+#[serde(transparent)]
 pub struct Element(pub(crate) Xid);
 
 impl Element {
@@ -120,11 +123,7 @@ impl Element {
     }
     
     pub fn splice_children(&self, range: std::ops::Range<usize>, replacement: Vec<Element>) -> Vec<Element> {
-        DOM
-            .get()
-            .unwrap()
-            .lock()
-            .unwrap()
+        dom!()
             .nodes
             .get_mut(&self.0)
             .unwrap()
@@ -191,8 +190,13 @@ impl Element {
     
     // events
     
+    // pub fn add_event_listener(&self, event: &str, handler: &str) {
+    //     let selector = format!("%{}", self.0);
+    //     dom!().listeners.entry(event.into()).or_default().push((Selector::parse(selector.as_str()), handler.into()));
+    // }
     pub fn add_event_listener(&self, event: &str, handler: &str) {
-        dom!().listeners.entry(event.into()).or_default().push((Some(format!("%{}", self.0)), handler.into()));
+        let selector = format!("%{}", self.0);
+        dom!().listeners.entry(event.into()).or_default().push((Some(selector), handler.into()));
     }
     
     pub fn remove_event_listener(&self, event: &str, handler: &str) {
@@ -225,22 +229,22 @@ impl Element {
         dom!().nodes.get(&self.0).unwrap().attributes.clone()
     }
     
-    pub fn set_attribute<T: Into<String>>(&self, name: &str, value: T) -> Option<Value> {
-        let prev_value = self.attribute(name);
-        dom!().nodes.get_mut(&self.0).unwrap().attributes.insert(name.into(), miniserde::json::from_str(&value.into()).unwrap());
-        prev_value
+    pub fn set_attribute<T: Into<Value>>(&self, name: &str, value: T) -> Option<Value> {
+        dom!().nodes.get_mut(&self.0).unwrap().attributes.insert(name.into(), value.into())
     }
     
     pub fn remove_attribute(&self, name: &str) -> Option<Value> {
-        let prev_value = self.attribute(name);
-        dom!().nodes.get_mut(&self.0).unwrap().attributes.remove(name);
-        prev_value
+        dom!().nodes.get_mut(&self.0).unwrap().attributes.remove(name)
     }
     
     // text
     
     pub fn text(&self) -> Option<String> {
         dom!().nodes.get(&self.0).unwrap().text.clone()
+    }
+    
+    pub fn set_text(&self, new_text: impl Into<String>) -> Option<String> {
+        dom!().nodes.get_mut(&self.0).unwrap().text.replace(new_text.into())
     }
     
     // selectors
@@ -253,8 +257,12 @@ impl Element {
         dom!().nodes.get(&self.0).unwrap().id.clone()
     }
     
-    pub fn classes(&self) -> std::collections::HashSet<String> {
-        dom!().nodes.get(&self.0).unwrap().classes.clone()
+    pub fn set_id(&self, new_id: impl Into<String>) -> Option<String> {
+        dom!().nodes.get_mut(&self.0).unwrap().id.replace(new_id.into())
+    }
+    
+    pub fn classes(&self) -> Vec<String> {
+        dom!().nodes.get(&self.0).unwrap().classes.iter().cloned().collect()
     }
     
     pub fn closest_ancestor(&self, selector: &str) -> Option<Element> {
@@ -275,12 +283,16 @@ impl Element {
         Engine::select(selector).contains(&self)
     }
     
-    pub fn scroll_offset(&self) -> lyon::math::Point {
-        dom!().nodes.get(&self.0).unwrap().scroll_offset
-    }
-    
     pub fn bounding_rectangle(&self) -> lyon::math::Box2D {
         todo!()
+    }
+    
+    pub fn style(&self) -> Style {
+        dom!().nodes.get(&self.0).unwrap().style.clone()
+    }
+    
+    pub fn set_style(&self, new_style: Style) -> Style {
+        std::mem::replace(&mut dom!().nodes.get_mut(&self.0).unwrap().style, new_style)
     }
     
     pub fn delete(&self) -> Vec<Element> {
@@ -307,11 +319,17 @@ impl Element {
         
         dom.animations.retain(|(x, _)| *x != self.0);
         
+        dom.available_xids.push(self.0);
+        
         children
     }
     
     pub fn scroll(&self) {
         todo!()
+    }
+    
+    pub fn scroll_offset(&self) -> lyon::math::Point {
+        dom!().nodes.get(&self.0).unwrap().scroll_offset
     }
     
     pub fn duplicate(&self) -> Element {

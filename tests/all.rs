@@ -2,11 +2,18 @@
 fn fx() {
     let engine = wasmi::Engine::default();
     
+    // let wat = r#"
+    //     (module
+    //         (import "host" "hello" (func $host_hello (param i32)))
+    //         (func (export "hello")
+    //             (call $host_hello (i32.const 3))
+    //         )
+    //     )
+    // "#;
     let wat = r#"
         (module
-            (import "host" "hello" (func $host_hello (param i32)))
             (func (export "hello")
-                (call $host_hello (i32.const 3))
+                (call $hello)
             )
         )
     "#;
@@ -16,6 +23,8 @@ fn fx() {
     let mut store = wasmi::Store::new(&engine, ());
     
     let host_fx = wasmi::Func::wrap(&mut store, |param: i32| println!("hi! #{param}#"));
+    // let host_fx = wasmi::Func::wrap(&mut store, heathen::call_inner);
+    
     
     let mut linker = wasmi::Linker::new(&engine);
     linker.define("host", "hello", host_fx).unwrap();
@@ -24,15 +33,18 @@ fn fx() {
     let fx = instance.get_func(&store, "hello").unwrap();
     fx.call(&mut store, &[], &mut []).unwrap();
     
-    println!("{:?}", heathen::Document::root().attributes());
-    
-    heathen::Document::root().set_attribute("test", r#"{ "z": ["abc", 1, 2] }"#);
-    
-    println!("{:?}", heathen::Document::root().attributes());
-    
-    println!("{:?}", heathen::Document::select("#hello").into_iter().map(|el| format!("{} - {:?}", el.tag(), el.attributes())).collect::<Vec<_>>());
     
     
+    return;
+    println!("{:?}", heathen::root().attributes());
+    
+    heathen::root().set_attribute("test", heathen::value!({ "z": ["abc", 1, 2] }));
+    
+    println!("{:?}", heathen::root().attributes());
+    
+    println!("@@@@@@@@");
+    println!("{:?}", heathen::select("%0").into_iter().map(|el| format!("{} - {:?}", el.tag(), el.attributes())).collect::<Vec<_>>());
+    println!("@@@@@@@@");
     
     // let width = 640;
     // let height = 320;

@@ -1,4 +1,5 @@
 use crate::{
+    Value,
     engine::{DOM, Engine, State},
     animations::Animation,
     element::Element
@@ -67,7 +68,9 @@ pub enum FocusEvent {
 
 #[derive(Clone)]
 pub struct ChangeEvent {
-    
+    pub attribute: String,
+    pub from: Value,
+    pub to: Value
 }
 
 #[derive(Clone)]
@@ -89,14 +92,26 @@ pub enum EventTy {
 
 #[derive(Clone)]
 pub struct Event {
-    pub timestamp: u128,
-    pub ty: EventTy,
+    pub(crate) timestamp: u128,
+    pub(crate) ty: EventTy,
     pub(crate) state: State,
     pub(crate) prev: State,
-    pub target: Element,
-    pub src: Element
+    pub(crate) target: Element,
+    pub(crate) src: Element,
+    pub(crate) extra: Value
 }
 impl Event {
+    pub fn new(ty: EventTy, src: Element, extra: Value) -> Event {
+        Event {
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
+            ty,
+            state: dom!().state.clone(),
+            prev: dom!().state.clone(),
+            target: Element(0),
+            src,
+            extra
+        }
+    }
     pub fn halt(&self) {
         // dom!().halted_events.insert(self.id.clone());
     }

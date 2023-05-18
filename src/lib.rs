@@ -1,16 +1,18 @@
 #[macro_use]
 mod engine;
-mod parsing;
+mod selectors;
 mod animations;
 mod events;
 mod style;
 mod node;
 mod document;
 mod element;
+mod rpc;
+mod bindings;
 
-pub(crate) type Xid = usize;
+pub(crate) type Xid = u64;
 
-pub use document::Document;
-pub use element::Element;
+pub use document::*;
 pub use events::Event;
-pub use miniserde::json::Value;
+pub use serde_json::Value;
+pub use serde_json::json as value;
