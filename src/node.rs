@@ -29,16 +29,9 @@ pub(crate) struct Node {
     pub(crate) style_score: std::collections::HashMap<String, usize>
 }
 
-
 pub struct Vertex {
-    pub position: glam::Vec3,
-    pub colour: colorgrad::Color
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct Vertex2 {
-    pub position: [f32; 3],
-    pub colour: [f32; 4]
+    pub position: [u32; 3],
+    pub colour: [u8; 4]
 }
 
 impl Node {
