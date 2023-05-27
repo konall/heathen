@@ -1,6 +1,5 @@
 use crate::{
     Value,
-    Xid,
     element::Element,
     events::Event,
     engine::{DOM, Engine},
@@ -11,9 +10,9 @@ pub fn root() -> Element {
     Element(0)//TODO
 }
 
-pub fn create_element(
+pub fn create_element<'a>(
     tag: &str,
-    props: Option<impl IntoIterator<Item = (impl Into<String>, impl Into<Value>)>>,
+    props: impl IntoIterator<Item = (&'a str, Value)>,
     children: &[Element]
 ) -> Element {
     let xid = Engine::xid();
@@ -22,13 +21,9 @@ pub fn create_element(
         tag: tag.into(),
         attributes: {
             props
-                .map(|prop| {
-                    prop
-                        .into_iter()
-                        .map(|(k, v)| (k.into(), v.into()))
-                        .collect()
-                })
-                .unwrap_or_default()
+                .into_iter()
+                .map(|(k, v)| (k.into(), v.into()))
+                .collect()
         },
         
         ..Default::default()
