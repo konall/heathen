@@ -8,8 +8,6 @@ use crate::{
 };
 
 #[derive(Copy, Clone, Default, Hash, Eq, PartialEq)]
-#[derive(serde::Serialize)]
-#[serde(transparent)]
 pub struct Element(pub(crate) Xid);
 
 impl Element {
