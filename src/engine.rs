@@ -356,7 +356,7 @@ impl Engine<'_> {
         let selectors =
             selectors
                 .split(',')
-                .filter_map(|s| Selector::parse(s))
+                .filter_map(|s| Selector::parse(std::borrow::Cow::Borrowed(s)))
                 .collect::<Vec<_>>();
         
         let mut res = std::collections::HashSet::new();
@@ -364,26 +364,25 @@ impl Engine<'_> {
         for selector in selectors {
             let mut matching = dom.nodes.keys().map(|xid| Element(*xid)).collect::<Vec<_>>();
             
-            for (rule, link) in selector.x {
-                println!("{:?} -- {:?} -- {:?}", rule.tag.as_ref().map(|x| x.0), rule.xid.as_ref().map(|x| x.0), rule.id.as_ref().map(|x| x.0));
+            for (rule, link) in &selector.rules {
                 matching.retain(|el| {
                     let node = &dom.nodes[&el.0];
                     
                     if let Some(tag) = &rule.tag {
-                        if node.tag != tag.0 {
+                        if node.tag != selector.get(tag.0) {
                             return false;
                         }
                     }
                     
                     if let Some(xid) = &rule.xid {
-                        if node.xid.to_string() != xid.0 {
+                        if node.xid.to_string() != selector.get(xid.0) {
                             return false;
                         }
                     }
                     
                     if let Some(id) = &rule.id {
                         if let Some(nid) = &node.id {
-                            if nid != id.0 {
+                            if nid != selector.get(id.0) {
                                 return false;
                             }
                         } else {
@@ -391,14 +390,14 @@ impl Engine<'_> {
                         }
                     }
                     
-                    if !rule.classes.iter().all(|class| node.classes.contains(class.0)) {
+                    if !rule.classes.iter().all(|class| node.classes.contains(selector.get(class.0))) {
                         return false;
                     }
                     
                     for attr in &rule.attributes {
                         match &attr.op {
                             Op::Exists => {
-                                if !node.attributes.contains_key(attr.name.0) {
+                                if !node.attributes.contains_key(selector.get(attr.name.0)) {
                                     return false;
                                 }
                             },
@@ -407,18 +406,19 @@ impl Engine<'_> {
                                     return false;
                                 };
                                 
-                                if let Some(nvalue) = node.attributes.get(attr.name.0) {
-                                    let v = serde_json::to_string(nvalue).unwrap();
-                                    return {
-                                        match op {
-                                            Op::Equals => v == value,
-                                            Op::NotEquals => v != value,
-                                            Op::StartsWith => v.starts_with(value),
-                                            Op::Contains => v.contains(value),
-                                            Op::EndsWith => v.ends_with(value),
+                                if let Some(nvalue) = node.attributes.get(selector.get(attr.name.0)) {
+                                    let v = serde_json::to_string(nvalue).unwrap().replace('"', "");
+                                    let valid = match op {
+                                        Op::Equals => v == selector.get(value),
+                                        Op::NotEquals => v != selector.get(value),
+                                        Op::StartsWith => v.starts_with(selector.get(value)),
+                                        Op::Contains => v.contains(selector.get(value)),
+                                        Op::EndsWith => v.ends_with(selector.get(value)),
                                             _ => false
-                                        }
                                     };
+                                    if !valid {
+                                        return false;
+                                    }
                                 } else {
                                     return false;
                                 }

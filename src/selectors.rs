@@ -1,48 +1,48 @@
-pub(crate) struct Xid<'a>(pub(crate) &'a str);
+pub(crate) struct Xid(pub(crate) (usize, usize));
 
-impl Xid<'_> {
-    fn parse(input: &str) -> (Option<Xid>, &str) {
-        if !input.chars().next().map(|c| c == '%').unwrap_or_default() {
-            return (None, input);
+impl Xid {
+    fn parse(src: &str, range: (usize, usize)) -> (Option<Xid>, (usize, usize)) {
+        if !(&src[range.0..range.1]).chars().next().map(|c| c == '%').unwrap_or_default() {
+            return (None, range);
         }
         
-        let pos = (&input[1..]).chars().position(|c| !c.is_digit(10));
+        let pos = (&src[(range.0 + 1)..range.1]).chars().position(|c| !c.is_digit(10));
         
         if let Some(pos) = pos {
             if pos == 0 {
-                (None, input)
+                (None, range)
             } else {
-                let xid = &input[1..pos];
-                let rest = &input[pos..];
+                let xid = ((range.0 + 1), (range.0 + pos));
+                let rest = ((range.0 + pos), range.1);
                 (Some(Xid(xid)), rest)
             }
         } else {
-            (Some(Xid(&input[1..])), "")
+            (Some(Xid(((range.0 + 1), range.1))), (range.1, src.chars().count()))
         }
     }
 }
 
 
-pub(crate) struct Ident<'a>(pub(crate) &'a str);
+pub(crate) struct Ident(pub(crate) (usize, usize));
 
-impl Ident<'_> {
-    fn parse(input: &str) -> (Option<Ident>, &str) {
-        if input.chars().next().map(|c| (c == '_') || c.is_alphabetic()).unwrap_or_default() {
-            let pos = (&input[1..]).chars().position(|c| !(c.is_alphabetic() || c.is_digit(10) || (c == '_')));
+impl Ident {
+    fn parse(src: &str, range: (usize, usize)) -> (Option<Ident>, (usize, usize)) {
+        if (&src[range.0..range.1]).chars().next().map(|c| (c == '_') || c.is_alphabetic()).unwrap_or_default() {
+            let pos = (&src[(range.0 + 1)..range.1]).chars().position(|c| !(c.is_alphabetic() || c.is_digit(10) || (c == '_')));
             
             if let Some(pos) = pos {
                 if pos == 0 {
-                    (Some(Ident(&input[..1])), &input[1..])
+                    (Some(Ident((range.0, (range.0 + 1)))), ((range.0 + 1), range.1))
                 } else {
-                    let ident = &input[..(pos+1)];
-                    let rest = &input[(pos+1)..];
+                    let ident = (range.0, (range.0 + pos + 1));
+                    let rest = ((range.0 + pos + 1), range.1);
                     (Some(Ident(ident)), rest)
                 }
             } else {
-                (Some(Ident(input)), "")
+                (Some(Ident(range)), (range.1, src.chars().count()))
             }
         } else {
-            (None, input)
+            (None, range)
         }
     }
 }
@@ -57,23 +57,23 @@ pub(crate) enum Op {
     EndsWith
 }
 
-pub(crate) struct Attribute<'a> {
-    pub(crate) name: Ident<'a>,
+pub(crate) struct Attribute {
+    pub(crate) name: Ident,
     pub(crate) op: Op,
-    pub(crate) value: Option<&'a str>
+    pub(crate) value: Option<(usize, usize)>
 }
 
-impl Attribute<'_> {
-    fn parse(input: &str) -> (Option<Attribute>, &str) {
-        if !input.chars().next().map(|c| c == '[').unwrap_or_default() {
-            return (None, input);
+impl Attribute {
+    fn parse(src: &str, range: (usize, usize)) -> (Option<Attribute>, (usize, usize)) {
+        if !(&src[range.0..range.1]).chars().next().map(|c| c == '[').unwrap_or_default() {
+            return (None, range);
         }
         
-        let (Some(ident), rest) = Ident::parse(&input[1..]) else {
-            return (None, input);
+        let (Some(ident), rest) = Ident::parse(src, ((range.0 + 1), range.1)) else {
+            return (None, range);
         };
         
-        if rest.chars().next().map(|c| c == ']').unwrap_or_default() {
+        if (&src[rest.0..rest.1]).chars().next().map(|c| c == ']').unwrap_or_default() {
             return (
                 Some(
                     Attribute {
@@ -82,16 +82,16 @@ impl Attribute<'_> {
                         value: None
                     }
                 ),
-                &rest[1..]
+                ((rest.0 + 1), rest.1)
             );
         }
         
-        let op = match rest.chars().next() {
+        let op = match (&src[rest.0..rest.1]).chars().next() {
             Some(c) => match c {
                 '=' => Op::Equals,
                 eqmod => {
-                    if !(&rest[1..]).chars().next().map(|c| c == '=').unwrap_or_default() {
-                        return (None, input);
+                    if !(&src[(rest.0 + 1)..rest.1]).chars().next().map(|c| c == '=').unwrap_or_default() {
+                        return (None, range);
                     }
                     
                     match eqmod {
@@ -99,24 +99,23 @@ impl Attribute<'_> {
                         '^' => Op::StartsWith,
                         '*' => Op::Contains,
                         '$' => Op::EndsWith,
-                        _ => return (None, input)
+                        _ => return (None, range)
                     }
                 }
             },
-            None => return (None, input)
+            None => return (None, range)
         };
         
         let start_pos = match op {
             Op::Equals => 1,
             _ => 2
         };
-        let end_pos = (&rest[start_pos..]).chars().position(|c| c == ']');
+        let end_pos = (&src[(rest.0 + start_pos)..rest.1]).chars().position(|c| c == ']');
         if let Some(end_pos) = end_pos {
             if end_pos == 0 {
-                (None, input)
+                (None, range)
             } else {
-                let value = &rest[start_pos..end_pos];
-                
+                let value = ((rest.0 + start_pos), (rest.0 + start_pos + end_pos));
                 (
                     Some(
                         Attribute {
@@ -125,32 +124,32 @@ impl Attribute<'_> {
                             value: Some(value)
                         }
                     ),
-                    &rest[(end_pos+1)..]
+                    ((rest.0 + start_pos + end_pos + 1), rest.1)
                 )
             }
         } else {
-            (None, input)
+            (None, range)
         }
     }
 }
 
 
-pub(crate) struct Rule<'a> {
-    pub(crate) tag: Option<Ident<'a>>,
-    pub(crate) xid: Option<Xid<'a>>,
-    pub(crate) id: Option<Ident<'a>>,
-    pub(crate) classes: Vec<Ident<'a>>,
-    pub(crate) attributes: Vec<Attribute<'a>>
+pub(crate) struct Rule {
+    pub(crate) tag: Option<Ident>,
+    pub(crate) xid: Option<Xid>,
+    pub(crate) id: Option<Ident>,
+    pub(crate) classes: Vec<Ident>,
+    pub(crate) attributes: Vec<Attribute>
 }
 
-impl Rule<'_> {
-    fn parse(input: &str) -> (Option<Rule>, &str) {
-        let (tag, rest) = Ident::parse(input);
-        let (xid, rest) = Xid::parse(rest);
+impl Rule {
+    fn parse(src: &str, range: (usize, usize)) -> (Option<Rule>, (usize, usize)) {
+        let (tag, rest) = Ident::parse(src, range);
+        let (xid, rest) = Xid::parse(src, rest);
         
         let (id, rest) = {
-            if rest.chars().next().map(|c| c == '#').unwrap_or_default() {
-                Ident::parse(&rest[1..])
+            if (&src[rest.0..rest.1]).chars().next().map(|c| c == '#').unwrap_or_default() {
+                Ident::parse(src, ((rest.0 + 1), rest.1))
             } else {
                 (None, rest)
             }
@@ -159,13 +158,13 @@ impl Rule<'_> {
         let (classes, rest) = {
             let mut classes = vec![];
             let mut nxt = rest;
-            while nxt.chars().next().map(|c| c == '.').unwrap_or_default() {
-                let (class, rest) = Ident::parse(&nxt[1..]);
+            while (&src[nxt.0..nxt.1]).chars().next().map(|c| c == '.').unwrap_or_default() {
+                let (class, rest) = Ident::parse(src, ((nxt.0 + 1), nxt.1));
                 if let Some(class) = class {
                     classes.push(class);
                     nxt = rest;
                 } else {
-                    return (None, input);
+                    return (None, range);
                 }
             }
             (classes, nxt)
@@ -173,7 +172,7 @@ impl Rule<'_> {
         
         let mut attributes = vec![];
         let mut rest = rest;
-        while let (Some(attribute), nxt) = Attribute::parse(rest) {
+        while let (Some(attribute), nxt) = Attribute::parse(src, rest) {
             attributes.push(attribute);
             rest = nxt;
         }
@@ -201,15 +200,15 @@ pub(crate) enum Link {
 }
 
 impl Link {
-    fn parse(input: &str) -> (Option<Link>, &str) {
-        let Some(start_pos) = input.chars().position(|c| !c.is_whitespace()) else {
-            return (None, input);
+    fn parse(src: &str, range: (usize, usize)) -> (Option<Link>, (usize, usize)) {
+        let Some(start_pos) = (&src[range.0..range.1]).chars().position(|c| !c.is_whitespace()) else {
+            return (None, range);
         };
         
-        let (link, rest) = match (&input[start_pos..]).chars().next() {
+        let (link, rest) = match (&src[(range.0 + start_pos)..range.1]).chars().next() {
             Some(c) => {
-                let rest = &input[(start_pos+1)..];
-                let rest2 = &input[(start_pos+2)..];
+                let rest = &src[(range.0 + start_pos + 1)..range.1];
+                let rest2 = &src[(range.0 + start_pos + 2)..range.1];
                 let c2 = rest.chars().next();
                 match c {
                     '<' => match c2 {
@@ -229,48 +228,51 @@ impl Link {
                         Some('+') => (Link::Siblings, rest2),
                         _ => (Link::PrevSibling, rest)
                     },
-                    _ => return (None, input)
+                    _ => return (None, range)
                 }
             },
-            None => return (None, input)
+            None => return (None, range)
         };
         
         let Some(end_pos) = rest.chars().position(|c| !c.is_whitespace()) else {
-            return (None, input);
+            return (None, range);
         };
         
-        (Some(link), &rest[end_pos..])
+        (Some(link), ((range.0 + end_pos), range.1))
     }
 }
 
 
 pub(crate) struct Selector<'a> {
-    pub(crate) x: Vec<(Rule<'a>, Option<Link>)>,
-    pub(crate) src: String
+    pub(crate) rules: Vec<(Rule, Option<Link>)>,
+    pub(crate) src: std::borrow::Cow<'a, str>
 }
 
 impl Selector<'_> {
-    pub(crate) fn parse(input: &str) -> Option<Selector> {
-        let mut res = vec![];
-        let mut rest = input;
+    pub(crate) fn parse(src: std::borrow::Cow<str>) -> Option<Selector> {
+        let mut rules = vec![];
+        let mut range = (0, src.chars().count());
         
         loop {
-            let (Some(rule), nxt) = Rule::parse(rest) else {
+            let (Some(rule), nxt) = Rule::parse(src.as_ref(), range) else {
                 return None;
             };
             
-            if let (Some(link), nxt) = Link::parse(nxt) {
-                res.push((rule, Some(link)));
-                rest = nxt;
+            if let (Some(link), nxt) = Link::parse(src.as_ref(), nxt) {
+                rules.push((rule, Some(link)));
+                range = nxt;
             } else {
-                res.push((rule, None));
+                rules.push((rule, None));
                 return Some(
                     Selector {
-                        x: res,
-                        src: input.to_string()
+                        rules, src
                     }
                 );
             }
         }
+    }
+    
+    pub(crate) fn get(&self, range: (usize, usize)) -> &str {
+        &self.src[range.0..range.1]
     }
 }
