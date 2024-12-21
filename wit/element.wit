@@ -1,0 +1,61 @@
+package konall:heathen;
+
+interface element {
+    use types.{point, rect};
+    use value.{value};
+    use style.{style};
+    
+    resource element {
+        parent: func() -> option<element>;
+        ancestors: func() -> list<element>;
+        change-parent: func(parent: option<element>, idx: option<s32>) -> option<element>;
+        detach: func() -> option<element>;
+        
+        children: func() -> list<element>;
+        descendants: func() -> list<element>;
+        nth-child: func(n: s32) -> option<element>;
+        first-child: func() -> option<element>;
+        last-child: func() -> option<element>;
+        splice-children: func(range: tuple<u32, u32>, replacement: list<element>) -> list<element>;
+        
+        siblings: func() -> list<element>;
+        nth-sibling: func(n: s32) -> list<element>;
+        next-sibling: func() -> option<element>;
+        prev-sibling: func() -> option<element>;
+        next-siblings: func() -> list<element>;
+        prev-siblings: func() -> list<element>;
+        
+        add-event-listener: func(event: string, handler: string);
+        remove-event-listener: func(event: string, handler: string);
+        
+        attribute: func(name: string) -> option<value>;
+        attributes: func() -> list<tuple<string, value>>;
+        set-attribute: func(name: string, value: value) -> option<value>;
+        remove-attribute: func(name: string) -> option<value>;
+        
+        text: func() -> option<string>;
+        set-text: func(new-text: string) -> option<string>;
+        
+        tag: func() -> string;
+        
+        id: func() -> option<string>;
+        set-id: func(new-id: string) -> option<string>;
+        
+        classes: func() -> list<string>;
+        add-classes: func(new-classes: list<string>);
+        remove-classes: func(old-classes: list<string>);
+        toggle-classes: func(toggled-classes: list<string>);
+        
+        style: func() -> style;
+        set-style: func(new-style: style) -> style;
+        
+        closest-ancestor: func(selector: string) -> option<element>;
+        matches: func(selector: string) -> bool;
+        
+        scroll-to: func(offset: u32);
+        scroll-offset: func() -> point;
+        
+        bounding-rectangle: func() -> rect;
+        duplicate: func() -> element;
+    }
+}

@@ -1,0 +1,22 @@
+package konall:heathen;
+
+interface style {
+    use types.{colour};
+    
+    variant background {
+        fill(colour),
+        pixels(list<u8>),
+        url(string)
+    }
+    
+    resource style {
+        z: func() -> float32;
+        set-z: func(new-z: float32) -> float32;
+        
+        opacity: func() -> float32;
+        set-opacity: func(new-opacity: float32) -> float32;
+        
+        background: func() -> background;
+        set-background: func(new-background: background) -> background;
+    }
+}

@@ -1,0 +1,11 @@
+package konall:heathen;
+
+use instance;
+use element;
+use value;
+
+world default {
+    export element;
+    export instance;
+    export value;
+}

@@ -1,0 +1,46 @@
+package konall:heathen;
+
+interface types {
+    type instance-id = u8;
+    
+    record rgba {
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8
+    }
+    
+    record hsla {
+        h: u16,
+        s: u8,
+        l: u8,
+        a: u8
+    }
+    
+    variant colour {
+        rgba(rgba),
+        hsla(hsla),
+        hex(string)
+    }
+    
+    enum gradient-ty {
+        linear,
+        radial
+    }
+    
+    record gradient {
+        ty: gradient-ty,
+        stops: list<colour>
+    }
+    
+    record point {
+        x: float32,
+        y: float32
+    }
+    
+    record rect {
+        origin: point,
+        w: float32,
+        h: float32
+    }
+}

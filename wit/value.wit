@@ -1,0 +1,30 @@
+package konall:heathen;
+
+interface value {
+    enum value-ty {
+        null,
+        %bool,
+        %string,
+        number,
+        array,
+        object
+    }
+    
+    resource value {
+        ty: func() -> value-ty;
+        
+        null: static func() -> value;
+        %bool: static func(v: bool) -> value;
+        %string: static func(v: string) -> value;
+        number: static func(v: float64) -> value;
+        array: static func(v: list<value>) -> value;
+        object: static func(v: list<tuple<string, value>>) -> value;
+        
+        as-null: func() -> option<result>;
+        as-bool: func() -> option<bool>;
+        as-string: func() -> option<string>;
+        as-number: func() ->  option<float64>;
+        as-array: func() -> option<list<value>>;
+        as-object: func() -> option<list<tuple<string, value>>>;
+    }
+}

@@ -1,3 +1,10 @@
+#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum Timing {
+    Linear,
+    EaseInOut,
+}
+
 #[derive(Clone)]
 pub struct Animation {
     pub curve: lyon::geom::CubicBezierSegment<f32>,

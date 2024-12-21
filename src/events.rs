@@ -1,8 +1,9 @@
 use crate::{
-    Value,
-    engine::{DOM, Engine, State},
+    Json,
     animations::Animation,
-    element::Element
+    element::Element,
+    engine::{Engine, State},
+    macros::instance
 };
 
 #[derive(Clone)]
@@ -69,8 +70,8 @@ pub enum FocusEvent {
 #[derive(Clone)]
 pub struct ChangeEvent {
     pub attribute: String,
-    pub from: Value,
-    pub to: Value
+    pub from: Json,
+    pub to: Json
 }
 
 #[derive(Clone)]
@@ -98,22 +99,22 @@ pub struct Event {
     pub(crate) prev: State,
     pub(crate) target: Element,
     pub(crate) src: Element,
-    pub(crate) extra: Value
+    pub(crate) extra: Json
 }
 impl Event {
-    pub fn new(ty: EventTy, src: Element, extra: Value) -> Event {
+    pub fn new(ty: EventTy, src: Element, extra: Json) -> Event {
         Event {
             timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
             ty,
-            state: dom!().state.clone(),
-            prev: dom!().state.clone(),
-            target: Element(0),
+            state: instance!(0).state.clone(),
+            prev: instance!(0).state.clone(),
+            target: Element { xid: 0, iid: 0 },
             src,
             extra
         }
     }
     pub fn halt(&self) {
-        // dom!().halted_events.insert(self.id.clone());
+        // instance!(id).halted_events.insert(self.id.clone());
     }
 }
 
@@ -121,15 +122,15 @@ pub struct Handler(pub(crate) String);
 
 impl From<&str> for Handler {
     fn from(value: &str) -> Self {
-        // if let Some(handler) = dom!().
+        // if let Some(handler) = instance!(id).
         Self(value.into())
     }
 }
 
 impl<T: Fn(Event) + Send + Sync + 'static>  From<T> for Handler {
     fn from(value: T) -> Self {
-        let name = Engine::xid().to_string();
-        dom!().handlers.insert(name.clone(), std::sync::Arc::new(std::sync::Mutex::new(value)));
+        let name = Engine::xid(1).to_string();
+        instance!(1).handlers.insert(name.clone(), std::sync::Arc::new(std::sync::Mutex::new(value)));
         Self(name)
     }
 }

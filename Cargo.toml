@@ -13,10 +13,11 @@ lyon = "1"
 taffy = { version = "0.3", features = ["serde"] }
 accesskit = "0.11"
 wasmi = "0.29"
-wit-bindgen = "0.7"
+wit-bindgen = "0.16"
 glam = "0.24"
 colorgrad = "0.6"
-once_cell = "1"
+cosmic-text = "0.8"
+dashmap = "5.4"
 
 [dev-dependencies]
 winit = "0.28.6"

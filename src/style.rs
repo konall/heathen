@@ -1,25 +1,14 @@
+use crate::{
+    animations::Timing,
+    text::Text
+};
+
 pub type HexColour = String;
 pub type Attribute = String;
 pub type Duration = f32;
 
-#[derive(Debug, Default, Clone, PartialEq)]
-pub enum TextAlign {
-    #[default]
-    Left,
-    Centre,
-    Right,
-}
-
-#[derive(Debug, Default, Clone, PartialEq)]
-pub enum TextMod {
-    #[default]
-    Regular,
-    Bold,
-    Italic,
-    Underline,
-}
-
 #[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Background {
     Fill(HexColour),
     PixMap(Vec<u8>),
@@ -29,17 +18,12 @@ pub enum Background {
 }
 impl Default for Background {
     fn default() -> Self {
-        Background::Fill(String::from("#000000"))
+        Background::Fill("#000000".into())
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Timing {
-    Linear,
-    EaseInOut,
-}
-
 #[derive(Debug, Default, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BorderRadii {
     pub top_left: f32,
     pub bottom_left: f32,
@@ -48,6 +32,7 @@ pub struct BorderRadii {
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BorderColours {
     pub top: HexColour,
     pub bottom: HexColour,
@@ -56,15 +41,7 @@ pub struct BorderColours {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct Text {
-    pub font: String,
-    pub size: f32,
-    pub align: TextAlign,
-    pub mods: TextMod,
-    pub colour: HexColour
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Transform {
     pub translate: (f32, f32),
     pub scale: (f32, f32),
@@ -72,6 +49,7 @@ pub struct Transform {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Style {
     pub z: f32,
     pub opacity: f32,
@@ -83,46 +61,14 @@ pub struct Style {
     pub border_radii: BorderRadii,
     pub border_colours: BorderColours,
     
+    #[serde(flatten)]
     pub layout: taffy::prelude::Style
 }
 
-#[derive(Clone, Default)]
-pub(crate) struct StyleNode {
-    pub(crate) style: Style,
-    
-    pub(crate) layers: std::collections::BTreeMap<String, StyleNode>
-}
-
 impl Style {
-    pub(crate) fn parse_sheet(src: &str) -> std::collections::BTreeMap<String, Style> {
-        let mut stylesheet = std::collections::BTreeMap::new();
-        
-        // let style_tree: std::collections::BTreeMap<String, StyleNode> = miniserde::json::from_str(src).unwrap();
-        
-        // let mut current = style_tree
-        //     .into_iter()
-        //     .map(|(k, v)| (k, v))
-        //     .collect::<Vec<(String, StyleNode)>>();
-        // let mut nxt = vec![];
-        
-        // while !current.is_empty() {
-        //     for (selector, node) in current {
-        //         stylesheet.insert(selector.clone(), node.style);
-                
-        //         nxt.extend(
-        //             node.layers
-        //                 .into_iter()
-        //                 .map(|(s, n)| (format!("{} {}", selector, s), n)),
-        //         );
-        //     }
-            
-        //     current = nxt;
-        //     nxt = vec![];
-        // }
-        
-        stylesheet
+    fn new() {
+        // cosmic_text::Align::
     }
-    
     // pub(crate) fn merge(&mut self, newer_style: &miniserde_json::Value) {
     //     let mut current_style = miniserde_json::to_value(&self).unwrap();
         
@@ -132,8 +78,17 @@ impl Style {
         
     //     *self = miniserde_json::from_value(current_style).unwrap();
     // }
-}
-
-pub(crate) struct StyleScore {
     
+    // text
+    fn text(&self) {
+        
+    }
+    
+    pub(crate) fn merge_with_style(&mut self, other: &Style) {
+        
+    }
+    
+    pub(crate) fn merge_with_selector(&mut self, selector: &str) {
+        
+    }
 }

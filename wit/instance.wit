@@ -1,0 +1,21 @@
+package konall:heathen;
+
+interface instance {
+    use element.{element};
+    use types.{instance-id};
+    use value.{value};
+    
+    resource instance {
+        id: func() -> instance-id;
+        root: func() -> option<element>;
+        create-element: func(tag: string, props: list<tuple<string, value>>, children: list<element>) -> element;
+        active-element: func() -> element;
+        // elements-at-point: func() -> point;
+        // remove-event-handler: func() -> handler;
+        trigger: func();
+        select: func(selector: string) -> list<element>;
+        select-one: func(selector: string) -> option<element>;
+        // render: func(root: element) -> tuple<list<vertex>, list<index>>;
+        destroy: func();
+    }
+}

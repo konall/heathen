@@ -1,0 +1,17 @@
+package konall:heathen;
+
+interface signal {
+    use value.{value};
+    
+    resource update-callback {
+        call: func();
+    }
+    
+    resource signal {
+        get: func() -> value;
+        get-untracked: func() -> value;
+        set: func(new-value: value);
+        set-untracked: func(new-value: value);
+        update: func();
+    }
+}

@@ -1,13 +1,15 @@
 use crate::{
-    Value,
-    Xid,
-    node::Node,
-    element::Element,
+    Json, InstanceId, Xid,
     animations::Animation,
+    element::Element,
     events::*,
-    style::Style,
+    macros::instance,
+    node::{Node, Vertex},
     selectors::{Selector, Op, Link},
+    style::Style,
+    text::TextResources
 };
+
 
 #[derive(Clone, Copy, Default)]
 pub(crate) enum Modifiers {
@@ -22,67 +24,47 @@ pub(crate) type ModifiersState = u8;
 
 #[derive(Copy, Clone, Default)]
 pub(crate) struct State {
+    iid: InstanceId,
     pub(crate) mouse_position: lyon::math::Point,
     pub(crate) hovered: Xid,
     pub(crate) focused: Xid,
     pub(crate) window_size: lyon::math::Size,
-    pub(crate) modifiers: ModifiersState,
+    pub(crate) modifiers: ModifiersState
 }
 impl State {
     pub fn mouse_position(&self) -> lyon::math::Point {
         self.mouse_position
     }
     pub fn hovered(&self) -> Element {
-        Element(self.hovered)
+        Element { xid: self.hovered, iid: self.iid }
     }
     pub fn focused(&self) -> Element {
-        Element(self.focused)
+        Element {xid: self.focused, iid: self.iid }
     }
     pub fn control_key_pressed(&self) -> bool {
-        self.modifiers & Modifiers::Control as u8 != 0
+        (self.modifiers & (Modifiers::Control as u8)) != 0
     }
     pub fn alt_key_pressed(&self) -> bool {
-        self.modifiers & Modifiers::Alt as u8 != 0
+        (self.modifiers & (Modifiers::Alt as u8)) != 0
     }
     pub fn shift_key_pressed(&self) -> bool {
-        self.modifiers & Modifiers::Shift as u8 != 0
+        (self.modifiers & (Modifiers::Shift as u8)) != 0
     }
     pub fn super_key_pressed(&self) -> bool {
-        self.modifiers & Modifiers::Super as u8 != 0
-    }
-}
-
-pub(crate) static DOM: once_cell::sync::OnceCell<std::sync::Arc<std::sync::Mutex<Engine>>> = once_cell::sync::OnceCell::new();
-macro_rules! dom {
-    () => {
-        DOM
-            .get_or_init(|| {
-                let mut engine = crate::engine::Engine::default();
-                engine.layout = taffy::Taffy::new();
-                
-                engine.nodes.insert(0, crate::node::Node {
-                    tag: "h1".into(),
-                    id: Some("hello".into()),
-                    ..Default::default()
-                });
-                
-                std::sync::Arc::new(std::sync::Mutex::new(engine))
-            })
-            .lock()
-            .unwrap()
+        (self.modifiers & (Modifiers::Super as u8)) != 0
     }
 }
 
 #[derive(Default)]
 pub(crate) struct Engine<'a> {
     pub(crate) state: State,
+    pub(crate) text_resources: TextResources,
     pub(crate) layout: taffy::Taffy,
     pub(crate) nodes: std::collections::HashMap<Xid, Node>,
-    pub(crate) root: Xid,
-    pub(crate) available_xids: Vec<Xid>,
+    pub(crate) root: Option<Xid>,
     
-    // pub(crate) listeners: std::collections::HashMap<String, Vec<(Option<Selector<'a>>, String)>>,
-    pub(crate) listeners: std::collections::HashMap<String, Vec<(Option<String>, String)>>,
+    pub(crate) components: std::collections::HashMap<String, fn() -> Element>,
+    pub(crate) listeners: std::collections::HashMap<String, Vec<(Option<Selector<'a>>, String)>>,
     pub(crate) handlers: std::collections::HashMap<String, std::sync::Arc<std::sync::Mutex<dyn Fn(Event) + Send + Sync + 'static>>>,
     pub(crate) indicators: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub(crate) requirements: std::collections::HashMap<String, std::collections::HashSet<String>>,
@@ -90,67 +72,31 @@ pub(crate) struct Engine<'a> {
     pub(crate) event_queue_being_cleared: bool,
     pub(crate) halted_events: std::collections::HashSet<Xid>,
     
-    // styling
     pub(crate) animations: Vec<(Xid, Animation)>,
-    pub(crate) stylesheet: std::collections::HashMap<Selector<'a>, Style>,
+    pub(crate) stylesheet: Vec<(Selector<'a>, Style)>
 }
 
 impl Engine<'_> {
-    pub(crate) fn xid() -> Xid {
-        dom!().available_xids.pop().unwrap_or(dom!().nodes.len() as Xid)
+    pub(crate) fn new_instance(iid: InstanceId, width: f32, height: f32) -> InstanceId {
+        crate::ENGINES.get_or_init(|| Default::default()).insert(iid, Engine::default());
+        instance!(iid).state.iid = iid;
+        instance!(iid).state.window_size = lyon::math::size(width, height);
+        iid
     }
     
-    pub(crate) fn is_within(xid: Xid, point: lyon::math::Point) -> bool {
-        // let inv_pos = self.model().inverse().transform_point3(Vec3::new(pos.x, pos.y, 0.0));
-        dom!()
-            .nodes
-            .get(&xid)
-            .map(|node| {
-                let layout = node.layout();
-                // TODO: account for border radius
-                (point.x > layout.location.x.into())
-                    && (point.x < (layout.location.x + layout.size.width).into())
-                    && (point.y > layout.location.y.into())
-                    && (point.y < (layout.location.y + layout.size.height).into())
-            })
-            .unwrap_or_default()
+    pub(crate) fn xid(iid: InstanceId) -> Xid {
+        (0..Xid::MAX).find(|xid| !instance!(iid).nodes.contains_key(xid)).unwrap_or_default()
     }
     
-    pub(crate) fn set_scroll_offset(&mut self, xid: Xid, scroll_offset: lyon::math::Point) {
-        self.nodes.get_mut(&xid).map(|node| {
+    pub(crate) fn set_scroll_offset(iid: InstanceId, xid: Xid, scroll_offset: lyon::math::Point) {
+        instance!(iid).nodes.get_mut(&xid).map(|node| {
             node.scroll_offset.x -= 10.0 * scroll_offset.x;
             node.scroll_offset.y -= 10.0 * scroll_offset.y;
         });
         // self.refresh_layout(&self.gfx);
     }
     
-    pub(crate) fn refresh_layout() {
-        let size = dom!().state.window_size;
-        
-        let root = dom!().nodes.get(&dom!().root).unwrap().layout_id;
-        
-        dom!().layout.set_style(
-            root,
-            taffy::style::Style {
-                size: taffy::geometry::Size {
-                    width: taffy::prelude::Dimension::Points(size.width as f32),
-                    height: taffy::prelude::Dimension::Points(size.height as f32),
-                },
-                ..Default::default() // ..self.layout.get_style(0).cloned().unwrap()
-            },
-        );
-        
-        dom!().layout.compute_layout(
-            root,
-            taffy::geometry::Size {
-                width: taffy::prelude::AvailableSpace::Definite(size.width as f32),
-                height: taffy::prelude::AvailableSpace::Definite(size.height as f32),
-            },
-        )
-        .unwrap();
-    }
-    
-    pub(crate) fn emit(ty: EventTy, src: Xid, extra: Value) {
+    pub(crate) fn emit(iid: InstanceId, ty: EventTy, src: Xid, extra: Json) {
         // --- actions: specifiers ---
         // click: left, right, middle
         // mouse: move, enter, leave,
@@ -171,15 +117,15 @@ impl Engine<'_> {
         // bubble, trickle, proximity,
         // default, halt, prevent
         
-        let state = dom!().state;
+        let state = instance!(iid).state;
         
         let mut event = Event {
             timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
             ty,
             state: state.clone(),
             prev: state.clone(),
-            target: Element(src),
-            src: Element(src),
+            target: Element { xid: src, iid },
+            src: Element { xid: src, iid },
             extra
         };
         
@@ -199,18 +145,18 @@ impl Engine<'_> {
             
             EventTy::Click(_) => {
                 // TODO: context menu?
-                let nxt_focused = dom!().state.hovered;
+                let nxt_focused = instance!(iid).state.hovered;
                 
                 event.state.focused = nxt_focused;
-                dom!().event_queue.push(event.clone());
+                instance!(iid).event_queue.push(event.clone());
                 
                 let new_focused = nxt_focused != event.prev.focused; //TODO: TAB FOCUS
                 if new_focused {
-                    dom!().state.focused = nxt_focused;
+                    instance!(iid).state.focused = nxt_focused;
                     current.push(Event {
                         ty: EventTy::Focus(FocusEvent::Out),
-                        target: Element(event.prev.focused),
-                        src: Element(event.prev.focused),
+                        target: Element { xid: event.prev.focused, iid },
+                        src: Element { xid: event.prev.focused, iid },
                         ..event.clone()
                     });
                     current.push(Event {
@@ -239,13 +185,13 @@ impl Engine<'_> {
             },
             
             EventTy::Mouse(e) => {
-                // dom!().state.mouse_position = e;
+                // instance!(id).state.mouse_position = e;
                 let nxt_hovered =
-                    dom!()
+                    instance!(iid)
                         .nodes
                         .values()
                         .filter(|n| {
-                                Self::is_within(n.xid, dom!().state.mouse_position)
+                                n.is_within(instance!(iid).state.mouse_position)
                                 && !n.hidden
                         })
                         .reduce(|acc, item| { if acc.style.z > item.style.z { acc } else { item } })
@@ -253,18 +199,18 @@ impl Engine<'_> {
                         .unwrap_or_default();
                     
                 event.state.hovered = nxt_hovered;
-                event.target = Element(nxt_hovered);
-                event.src = Element(nxt_hovered);
+                event.target = Element { xid: nxt_hovered, iid };
+                event.src = Element { xid: nxt_hovered, iid };
                 
                 current.push(event.clone());
                 
                 let new_hovered = nxt_hovered != event.prev.hovered;
                 if new_hovered {
-                    dom!().state.hovered = nxt_hovered;
+                    instance!(iid).state.hovered = nxt_hovered;
                     current.push(Event {
                         ty: EventTy::Mouse(MouseEvent::Leave),
-                        target: Element(event.prev.hovered),
-                        src: Element(event.prev.hovered),
+                        target: Element { xid: event.prev.hovered, iid },
+                        src: Element { xid: event.prev.hovered, iid},
                         ..event.clone()
                     });
                     current.push(Event {
@@ -289,7 +235,7 @@ impl Engine<'_> {
         
         while !current.is_empty() {
             for mut event in current {
-                dom!().event_queue.push(event.clone());
+                instance!(iid).event_queue.push(event.clone());
                 // if let Some(parent) = this.borrow().parents.get(&event.target.0) {
                 //     if *parent != event.target.0 {
                 //         event.target.0 = *parent;
@@ -301,14 +247,14 @@ impl Engine<'_> {
             nxt = vec![];
         }
         
-        if !dom!().event_queue_being_cleared {
-            dom!().event_queue_being_cleared = true;
+        if !instance!(iid).event_queue_being_cleared {
+            instance!(iid).event_queue_being_cleared = true;
             
-            let mut queue = dom!().event_queue.drain(..).collect::<Vec<_>>();
+            let mut queue = instance!(iid).event_queue.drain(..).collect::<Vec<_>>();
             
             while !queue.is_empty() {
                 for event in queue {
-                    // if dom!().halted_events.contains(&event.id) {
+                    // if instance!(id).halted_events.contains(&event.id) {
                     //     continue;TODO
                     // }
                     
@@ -326,47 +272,40 @@ impl Engine<'_> {
                     //             .into_iter()
                     //             .flatten()
                     //             .filter_map(|(selector, handler)| {
-                    //                 dom!().handlers.get(handler).cloned()
+                    //                 instance!(id).handlers.get(handler).cloned()
                     //             }) //TODO: filter out event.target not in dom.select(selector)
                     //             .collect::<Vec<_>>()
                     //     })
                     //     .for_each(|fx| fx(event.clone()));
                 }
                 
-                queue =
-                    DOM
-                        .get()
-                        .unwrap()
-                        .lock()
-                        .unwrap()
-                        .event_queue
-                        .drain(..)
-                        .collect();
+                queue = instance!(iid).event_queue.drain(..).collect();
             }
             
-            dom!().halted_events.clear();
+            instance!(iid).halted_events.clear();
             
-            dom!().event_queue_being_cleared = false;
+            instance!(iid).event_queue_being_cleared = false;
         }
     }
     
-    pub(crate) fn select(selectors: &str) -> Vec<Element> {
-        let dom = dom!();
+    pub(crate) fn select(iid: InstanceId, selectors: &str) -> Vec<Element> {
+        let mut res = std::collections::HashSet::new();
         
-        let selectors =
+        for selector in {
             selectors
                 .split(',')
                 .filter_map(|s| Selector::parse(std::borrow::Cow::Borrowed(s)))
-                .collect::<Vec<_>>();
-        
-        let mut res = std::collections::HashSet::new();
-        
-        for selector in selectors {
-            let mut matching = dom.nodes.keys().map(|xid| Element(*xid)).collect::<Vec<_>>();
+        } {
+            let mut matching =
+                instance!(iid)
+                    .nodes
+                    .keys()
+                    .map(|xid| Element { xid: *xid, iid })
+                    .collect::<Vec<_>>();
             
             for (rule, link) in &selector.rules {
                 matching.retain(|el| {
-                    let node = &dom.nodes[&el.0];
+                    let node = &instance!(iid).nodes[&el.xid];
                     
                     if let Some(tag) = &rule.tag {
                         if node.tag != selector.get(tag.0) {
@@ -414,7 +353,7 @@ impl Engine<'_> {
                                         Op::StartsWith => v.starts_with(selector.get(value)),
                                         Op::Contains => v.contains(selector.get(value)),
                                         Op::EndsWith => v.ends_with(selector.get(value)),
-                                            _ => false
+                                        _ => false
                                     };
                                     if !valid {
                                         return false;
@@ -466,5 +405,31 @@ impl Engine<'_> {
         }
         
         res.into_iter().collect()
+    }
+    
+    pub(crate) fn render(iid: InstanceId, root: Xid) -> lyon::tessellation::VertexBuffers<Vertex, u16> {
+        if !instance!(iid).nodes.contains_key(&root) {
+            return lyon::tessellation::VertexBuffers::new();
+        }
+        
+        instance!(iid).root = Some(root);
+        let root_layout_id = instance!(iid).nodes[&root].layout_id;
+        
+        let size = instance!(iid).state.window_size;
+        instance!(iid).layout.compute_layout(
+            root_layout_id,
+            taffy::prelude::Size {
+                width: taffy::prelude::AvailableSpace::Definite(size.width),
+                height: taffy::prelude::AvailableSpace::Definite(size.height)
+            }
+        );
+        
+        let mut buffers = lyon::tessellation::VertexBuffers::new();
+        for node in instance!(iid).nodes.values() {
+            let buffer = node.render();
+            buffers.indices.extend(buffer.indices);
+            buffers.vertices.extend(buffer.vertices);
+        }
+        buffers
     }
 }
